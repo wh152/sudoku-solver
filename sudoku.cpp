@@ -451,7 +451,7 @@ private:
 
   std::expected<void, parse_board_err> 
   test_box(const size_t box_row_idx, const size_t box_idx, bool root=false) {
-    std::print("\ntest_box, root=", (root ? "true" : "false"));
+    std::print("\ntest_box, root=", root);
     BoxT box = this->board[box_row_idx][box_idx]; // have to update board, rows, cols
     print_group<BoxT>(box);
     BoxSetT box_set = this->box_row_sets[box_row_idx][box_idx];
@@ -693,7 +693,7 @@ private:
   void add_box_sym(const SymT sym, const size_t box_row_idx, const size_t box_idx, 
                     const size_t box_sym_idx, bool root=false) {
     std::println("*** add_box_sym, sym = {0}, box_row_idx = {1}, box_idx = {2}, box_sym_idx = {3}, root = {4}",
-                  (char)sym, box_row_idx, box_idx, box_sym_idx, (root ? "true" : "false"));
+                  (char)sym, box_row_idx, box_idx, box_sym_idx, root);
     this->board.at(box_row_idx).at(box_idx)[box_sym_idx] = sym;
     this->box_row_sets.at(box_row_idx).at(box_idx).insert(sym);
     this->sym_found = true;
@@ -708,7 +708,7 @@ private:
 
   void add_row_sym(const SymT sym, const size_t row_idx, const size_t row_sym_idx, bool root=false) {
     std::println("*** add_row_sym, sym = {0}, row_idx = {1}, row_sym_idx = {2}, root = {3}", 
-                  (char)sym, row_idx, row_sym_idx, (root ? "true" : "false"));
+                  (char)sym, row_idx, row_sym_idx, root);
     this->rows.at(row_idx)[row_sym_idx] = sym;
     this->row_sets.at(row_idx).insert(sym);
     this->sym_found = true;
@@ -724,7 +724,7 @@ private:
 
   void add_col_sym(const SymT sym, const size_t col_idx, const size_t col_sym_idx, bool root=false) {
     std::println("*** add_col_sym, sym = {0}, col_idx = {1}, col_sym_idx = {2}, root = {3}", 
-                  (char)sym, col_idx, col_sym_idx, (root ? "true" : "false"));
+                  (char)sym, col_idx, col_sym_idx, root);
     this->cols.at(col_idx)[col_sym_idx] = sym;
     this->col_sets.at(col_idx).insert(sym);
     this->sym_found = true;
