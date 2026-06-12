@@ -7,6 +7,7 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <print>
 #include <ranges>
 #include <regex>
 #include <set>
@@ -367,14 +368,14 @@ private:
 
   void print_set(const auto& set) {
     if (set.empty()) {
-      std::cout << '\n';
+      std::println();
       return;
     }
 
     for (const auto& elem : set) {
-      std::cout << static_cast<char>(elem) << ' ';
+      std::print("{0} ", static_cast<char>(elem));
     }
-    std::cout << '\n';
+    std::println();
   }
 
   template <typename T>
@@ -382,34 +383,34 @@ private:
     for (const auto &[idx, group] : std::views::enumerate(all_groups)) {
       if (idx % this->num_dims == 0) {
         for (size_t i = 1; i < 2 * this->num_symbols; ++i)
-          std::cout << '-';
-        std::cout << '\n';
+          std::print("-");
+        std::println();
       }
       for (const auto &[sym_idx, sym] : std::views::enumerate(group))
-        std::cout << static_cast<char>(sym) << (((sym_idx + 1) % this->num_dims == 0) ? '|' : ' ');
-      std::cout << '\n';
+        std::print("{0}{1}", static_cast<char>(sym), (((sym_idx + 1) % this->num_dims == 0) ? '|' : ' '));
+      std::println();
     }
     for (size_t i = 1; i < 2 * this->num_symbols; ++i)
-      std::cout << '-';
-    std::cout << '\n';
+      std::print("-");
+    std::println();
   }
 
   void print_box(BoxT box) {
     for (size_t i = 1; i < 2 * this->num_dims; ++i)
-          std::cout << '-';
-    std::cout << '\n';
+          std::print("-");
+    std::println();
     for (const auto &[sym_idx, sym] : std::views::enumerate(box))
-      std::cout << static_cast<char>(sym) << (((sym_idx + 1) % this->num_dims == 0) ? '\n' : ' ');
+      std::print("{0}{1}", static_cast<char>(sym), (((sym_idx + 1) % this->num_dims == 0) ? '\n' : ' '));
     for (size_t i = 1; i < 2 * this->num_dims; ++i)
-      std::cout << '-';
-    std::cout << '\n';
+      std::print("-");
+    std::println();
   }
 
   template<typename T>
   void print_group(T group) {
     for (const SymT elt : group)
-      std::cout << static_cast<char>(elt) << ' ';
-    std::cout << '\n';
+      std::print("{0} ", static_cast<char>(elt));
+    std::println();
   }
 
   std::pair<std::size_t, std::size_t> 
@@ -450,23 +451,23 @@ private:
 
   std::expected<void, parse_board_err> 
   test_box(const size_t box_row_idx, const size_t box_idx, bool root=false) {
-    std::cout << "\ntest_box, root=" << (root ? "true" : "false") << '\n';
+    std::print("\ntest_box, root=", (root ? "true" : "false"));
     BoxT box = this->board[box_row_idx][box_idx]; // have to update board, rows, cols
     print_group<BoxT>(box);
     BoxSetT box_set = this->box_row_sets[box_row_idx][box_idx];
 
     const size_t sym_count = box_set.size();
     if (sym_count == this->num_symbols) {
-      std::cout << "Returning\n";
+      std::println("Returning");
       return {};
     }
 
     auto unknown_sym_indices = unknown_symbols_indices<BoxT>(box);
-    std::cout << "unknown_sym_indices = ";
+    std::print("unknown_sym_indices = ");
     for (const auto idx : unknown_sym_indices) {
-      std::cout << idx << ' ';
+      std::print("{0} ", idx);
     }
-    std::cout << '\n';
+    std::println();
     
     if (sym_count == this->num_symbols - 1) {
       const SymT last_unknown_sym = unknown_sym_indices.at(0);
@@ -474,7 +475,7 @@ private:
       add_box_sym(last_unknown_sym, box_row_idx, box_idx, box_sym_idx, true);
     }
     
-    std::cout << "Checking each unknown index\n";
+    std::println("Checking each unknown index");
 
     // ***** FIX FOR LOGIC ERROR *****
     /*
@@ -532,56 +533,56 @@ private:
 
     const auto unordered_box_syms = this->box_row_sets.at(box_row_idx).at(box_idx);
     const auto box_syms = std::set<SymT>(unordered_box_syms.begin(), unordered_box_syms.end());
-    std::cout << "box_syms = ";
+    std::print("box_syms = ");
     print_group<std::set<SymT>>(box_syms);
 
     std::set<SymT> unknown_syms{};
     std::set_difference(this->symbols.begin(), this->symbols.end(), box_syms.begin(), 
                         box_syms.end(), std::inserter(unknown_syms, unknown_syms.end()));
-    std::cout << "unknown_syms (size=" << std::to_string(unknown_syms.size()) << "): ";
+    std::print("unknown_syms (size={0}): ", std::to_string(unknown_syms.size()));
     print_group<std::set<SymT>>(unknown_syms);
 
     std::vector<std::set<SymT>> unknown_boxes_syms{};
 
     // These can be created once outside the while loop and then removed from if a sym is found
-    std::cout << "Creating unknown sym sets\n";
+    std::println("Creating unknown sym sets");
     for (const size_t box_sym_idx : unknown_sym_indices) {
-      std::cout << "box_sym_idx: " << std::to_string(box_sym_idx) << '\n';
+      std::println("box_sym_idx: {0}", std::to_string(box_sym_idx));
 
       const auto [row_idx, col_idx] = box_idx_to_row_col_idx(box_row_idx, box_idx, box_sym_idx);
-      std::cout << "row_idx = " << row_idx << ", col_idx = " << col_idx << '\n';
+      std::println("row_idx = {0}, col_idx = ", row_idx, col_idx);
       
       const auto row_syms = this->row_sets.at(row_idx);
-      std::cout << "row_syms = ";
+      std::print("row_syms = ");
       print_set(row_syms);
       const auto col_syms = this->col_sets.at(col_idx);
-      std::cout << "col_syms = ";
+      std::print("col_syms = ");
       print_set(col_syms);
 
       std::vector<SymT> row_invalid_syms;
       std::set_intersection(unknown_syms.begin(), unknown_syms.end(), row_syms.begin(), 
                             row_syms.end(), std::back_inserter(row_invalid_syms));
-      std::cout << "row_invalid_syms = ";
+      std::print("row_invalid_syms = ");
       print_set(row_invalid_syms);
 
       std::vector<SymT> col_invalid_syms;
       std::set_intersection(unknown_syms.begin(), unknown_syms.end(), col_syms.begin(), 
                             col_syms.end(), std::back_inserter(col_invalid_syms));
-      std::cout << "col_invalid_syms = ";
+      std::print("col_invalid_syms = ");
       print_set(col_invalid_syms);
 
       std::vector<SymT> idx_invalid_syms;
       std::set_union(row_invalid_syms.begin(), row_invalid_syms.end(), 
                       col_invalid_syms.begin(), col_invalid_syms.end(), 
                       std::back_inserter(idx_invalid_syms));
-      std::cout << "idx_invalid_syms = ";
+      std::print("idx_invalid_syms = ");
       print_set(idx_invalid_syms);
 
       std::vector<SymT> idx_valid_syms;
       std::set_difference(unknown_syms.begin(), unknown_syms.end(), 
                           idx_invalid_syms.begin(), idx_invalid_syms.end(), 
                           std::back_inserter(idx_valid_syms));
-      std::cout << "idx_valid_syms = ";
+      std::print("idx_valid_syms = ");
       print_set(idx_valid_syms);
       const auto idx_valid_syms_set = std::set<SymT>(idx_valid_syms.begin(), 
                                                         idx_valid_syms.end());
@@ -593,7 +594,7 @@ private:
     // logs show it didn't add a 4 in the row but it thinks the row has a 4 in it
     // row_syms = 1 2 4 8 9, col_syms = 5 6 
 
-    std::cout << "Unknown sym sets:\n";
+    std::println("Unknown sym sets:");
     for (const auto unknown_box_syms : unknown_boxes_syms)
       print_set(unknown_box_syms);
     print_set<RowSetT>(this->row_sets.at(1));
@@ -604,16 +605,16 @@ private:
     while (box_updated) {
       box_updated = false;
 
-      std::cout << "Trying to find symbols\n";
+      std::println("Trying to find symbols");
       for (const auto [unknown_sym_idx, box_sym_idx] : std::views::enumerate(unknown_sym_indices)) {
-        std::cout << "unknown_sym_idx = " << unknown_sym_idx << ", box_sym_idx = " << box_sym_idx << '\n';
+        std::println("unknown_sym_idx = {0}, box_sym_idx = {1}", unknown_sym_idx, box_sym_idx);
         const auto unknown_box_syms = unknown_boxes_syms.at(unknown_sym_idx);
-        std::cout << "unknown_box_syms = ";
+        std::print("unknown_box_syms = ");
         print_set(unknown_box_syms);
 
         if (unknown_box_syms.size() == 1) {
           const SymT found_sym = static_cast<SymT>(*unknown_box_syms.begin());
-          std::cout << "Index " << unknown_sym_idx << " must be " << static_cast<char>(found_sym) << '\n';
+          std::println("Index {0} must be {1}", unknown_sym_idx, static_cast<char>(found_sym));
           // this logic is repeated below, put in a function later?
           unknown_syms.erase(unknown_syms.find(found_sym));
           unknown_boxes_syms.erase(unknown_boxes_syms.begin() + unknown_sym_idx);
@@ -621,44 +622,44 @@ private:
             unknown_boxes_syms.at(box_idx).erase(found_sym);
           for (auto unknown_box_sym : unknown_boxes_syms)
             print_set(unknown_box_sym);
-          std::cout << "Calling add_box_sym, box_sym_idx = " << box_sym_idx << '\n';
+          std::println("Calling add_box_sym, box_sym_idx = {0}", box_sym_idx);
           add_box_sym(found_sym, box_row_idx, box_idx, box_sym_idx, true);
           unknown_sym_indices.erase(unknown_sym_indices.begin() + unknown_sym_idx);
           box_updated = true;
-          std::cout << "Added symbol " << (char)found_sym << ", trying to update box again\n";
+          std::println("Added symbol {0}, trying to update box again", (char)found_sym);
           break;
         }
 
         std::set<SymT> other_boxes_valid_syms;
-        std::cout << "Getting other_boxes_valid_syms\n";
+        std::println("Getting other_boxes_valid_syms");
         for (const auto [other_unknown_sym_idx, other_box_sym_idx] : std::views::enumerate(unknown_sym_indices)) {
           if (box_sym_idx == other_box_sym_idx) continue;
 
-          std::cout << "other_unknown_sym_idx = " << other_unknown_sym_idx << ", other_box_sym_idx = " << other_box_sym_idx << '\n';
+          std::println("other_unknown_sym_idx = {0}, other_box_sym_idx = {1}", other_unknown_sym_idx, other_box_sym_idx);
           const auto other_unknown_box_syms = unknown_boxes_syms.at(other_unknown_sym_idx);
-          std::cout << "other_unknown_box_syms = ";
+          std::print("other_unknown_box_syms = ");
           print_set(other_unknown_box_syms);
 
           for (const SymT invalid_sym : other_unknown_box_syms)
             other_boxes_valid_syms.insert(invalid_sym);
         }
-        std::cout << "other_boxes_valid_syms = ";
+        std::print("other_boxes_valid_syms = ");
         print_set(other_boxes_valid_syms);
 
         std::vector<SymT> invalid_syms;
         std::set_intersection(unknown_box_syms.begin(), unknown_box_syms.end(), 
                               other_boxes_valid_syms.begin(), other_boxes_valid_syms.end(), 
                               std::back_inserter(invalid_syms));
-        std::cout << "invalid_syms = ";
+        std::print("invalid_syms = ");
         print_set(invalid_syms);
 
         std::vector<SymT> valid_syms;
-        std::cout << "unknown_box_syms = ";
+        std::print("unknown_box_syms = ");
         print_set(unknown_box_syms);
         std::set_difference(unknown_box_syms.begin(), unknown_box_syms.end(), 
                             invalid_syms.begin(), invalid_syms.end(), 
                             std::back_inserter(valid_syms));
-        std::cout << "valid_syms (size=" << valid_syms.size() << ") = ";
+        std::print("valid_syms (size={0}) = ", valid_syms.size());
         print_set(valid_syms);
 
         if (valid_syms.size() > 1)
@@ -679,7 +680,7 @@ private:
         add_box_sym(found_sym, box_row_idx, box_idx, box_sym_idx, true);
         unknown_sym_indices.erase(unknown_sym_indices.begin() + unknown_sym_idx);
         box_updated = true;
-        std::cout << "Added symbol " << (char)found_sym << ", trying to update box again\n";
+        std::println("Added symbol {0}, trying to update box again", (char)found_sym);
         break;
       }
     }
@@ -836,9 +837,8 @@ private:
 
   void add_box_sym(const SymT sym, const size_t box_row_idx, const size_t box_idx, 
                     const size_t box_sym_idx, bool root=false) {
-    std::cout << "*** add_box_sym, sym = " << (char)sym << ", box_row_idx = " << box_row_idx 
-              << ", box_idx = " << box_idx << ", box_sym_idx = " << box_sym_idx << ", root=" 
-              << (root ? "true" : "false") << '\n';
+    std::println("*** add_box_sym, sym = {0}, box_row_idx = {1}, box_idx = {2}, box_sym_idx = {3}, root = {4}",
+                  (char)sym, box_row_idx, box_idx, box_sym_idx, (root ? "true" : "false"));
     this->board.at(box_row_idx).at(box_idx)[box_sym_idx] = sym;
     this->box_row_sets.at(box_row_idx).at(box_idx).insert(sym);
     this->sym_found = true;
@@ -852,8 +852,8 @@ private:
   }
 
   void add_row_sym(const SymT sym, const size_t row_idx, const size_t row_sym_idx, bool root=false) {
-    std::cout << "*** add_row_sym, sym = " << (char)sym << ", row_idx = " << row_idx 
-              << ", row_sym_idx = " << row_sym_idx << ", root=" << (root ? "true" : "false") << '\n';
+    std::println("*** add_row_sym, sym = {0}, row_idx = {1}, row_sym_idx = {2}, root = {3}", 
+                  (char)sym, row_idx, row_sym_idx, (root ? "true" : "false"));
     this->rows.at(row_idx)[row_sym_idx] = sym;
     this->row_sets.at(row_idx).insert(sym);
     this->sym_found = true;
@@ -868,8 +868,8 @@ private:
   }
 
   void add_col_sym(const SymT sym, const size_t col_idx, const size_t col_sym_idx, bool root=false) {
-    std::cout << "*** add_col_sym, sym = " << (char)sym << ", col_idx = " << col_idx 
-              << ", col_sym_idx = " << col_sym_idx << ", root=" << (root ? "true" : "false") << '\n';
+    std::println("*** add_col_sym, sym = {0}, col_idx = {1}, col_sym_idx = {2}, root = {3}", 
+                  (char)sym, col_idx, col_sym_idx, (root ? "true" : "false"));
     this->cols.at(col_idx)[col_sym_idx] = sym;
     this->col_sets.at(col_idx).insert(sym);
     this->sym_found = true;
@@ -929,14 +929,14 @@ public:
     initialize_box_row_sets();
     initialize_row_sets();
     initialize_col_sets();
-    std::cout << "Printing box_row_sets\n";
+    std::println("Printing box_row_sets");
     for (const auto &box_row_set : this->box_row_sets)
       for (const auto &box_set : box_row_set)
         print_set(box_set);
-    std::cout << "Printing row_sets\n";
+    std::println("Printing row_sets");
     for (const auto &row_set : this->row_sets)
       print_set(row_set);
-    std::cout << "Printing col_sets\n";
+    std::println("Printing col_sets");
     for (const auto &col_set : this->col_sets)
       print_set(col_set);
     /*
@@ -992,8 +992,8 @@ int main(int argc, char *argv[]) {
   const char *outfile = (argc == 4) ? argv[3] : "result.txt";
   auto board = Sudoku::Sudoku<std::uint16_t>(argv[1], argv[2], outfile);
   bool solved = board.solve();
-  std::cout << (solved ? "Solved" : "Failed") << '\n';
-  std::cout << board.write_answer() << '\n';
+  std::println("{0}", (solved ? "Solved" : "Failed"));
+  std::println("{0}", board.write_answer());
 
   return EXIT_SUCCESS;
 }
