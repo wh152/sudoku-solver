@@ -450,8 +450,8 @@ private:
   }
 
   std::expected<void, parse_board_err> 
-  test_box(const size_t box_row_idx, const size_t box_idx, bool root=false) {
-    std::print("\ntest_box, root=", root);
+  test_box(const size_t box_row_idx, const size_t box_idx) {
+    std::println("\ntest_box");
     BoxT box = this->board[box_row_idx][box_idx]; // have to update board, rows, cols
     print_group<BoxT>(box);
     BoxSetT box_set = this->box_row_sets[box_row_idx][box_idx];
@@ -807,7 +807,7 @@ public:
 
       for (size_t box_row_idx = 0; box_row_idx < this->num_dims; ++box_row_idx)
         for (size_t box_idx = 0; box_idx < this->num_dims; ++box_idx) {
-          if (!test_box(box_row_idx, box_idx, true).has_value())
+          if (!test_box(box_row_idx, box_idx).has_value())
             return false; // return std::unexpected but don't use it here...
           print_box(this->board.at(box_row_idx).at(box_idx));
         }
