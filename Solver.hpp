@@ -262,13 +262,9 @@ public:
     // have vectors for rows and columns
     // create matrix from board for now
     // ideally just make a matrix from the string after
-    this->board.boxes_to_rows();
+    this->board.setup_board();
     this->board.print_board(this->board.rows);
-    this->board.rows_to_cols();
     this->board.print_board(this->board.cols);
-    this->board.initialize_box_row_sets();
-    this->board.initialize_row_sets();
-    this->board.initialize_col_sets();
     std::println("Printing box_row_sets");
     for (const auto &box_row_set : this->board.box_row_sets)
       for (const auto &box_set : box_row_set)

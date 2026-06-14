@@ -378,6 +378,14 @@ private:
     }
   }
 
+  void setup_board() {
+    boxes_to_rows();
+    rows_to_cols();
+    initialize_box_row_sets();
+    initialize_row_sets();
+    initialize_col_sets();
+  }
+
   void print_set(const auto& set) {
     if (set.empty()) {
       std::println();
