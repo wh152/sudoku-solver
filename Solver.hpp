@@ -15,7 +15,7 @@ private:
   test_box(const size_t box_row_idx, const size_t box_idx) {
     std::println("\ntest_box");
     BoxT<SymT> box = this->board.boxes[box_row_idx][box_idx]; // have to update board, rows, cols
-    this->board.template print_group<BoxT<SymT>>(box);
+    this->board.print_group(box);
     BoxSetT<SymT> box_set = this->board.box_row_sets[box_row_idx][box_idx];
 
     const size_t sym_count = box_set.size();
@@ -24,7 +24,7 @@ private:
       return {};
     }
 
-    auto unknown_sym_indices = this->board.template unknown_symbols_indices<BoxT<SymT>>(box);
+    auto unknown_sym_indices = this->board.unknown_symbols_indices(box);
     std::print("unknown_sym_indices = ");
     for (const auto idx : unknown_sym_indices) {
       std::print("{0} ", idx);
@@ -97,13 +97,13 @@ private:
     const auto unordered_box_syms = this->board.box_row_sets.at(box_row_idx).at(box_idx);
     const auto box_syms = std::set<SymT>(unordered_box_syms.begin(), unordered_box_syms.end());
     std::print("box_syms = ");
-    this->board.template print_group<std::set<SymT>>(box_syms);
+    this->board.print_group(box_syms);
 
     std::set<SymT> unknown_syms{};
     std::set_difference(this->board.symbols.begin(), this->board.symbols.end(), box_syms.begin(), 
                         box_syms.end(), std::inserter(unknown_syms, unknown_syms.end()));
     std::print("unknown_syms (size={0}): ", std::to_string(unknown_syms.size()));
-    this->board.template print_group<std::set<SymT>>(unknown_syms);
+    this->board.print_group(unknown_syms);
 
     std::vector<std::set<SymT>> unknown_boxes_syms{};
 
@@ -160,7 +160,7 @@ private:
     std::println("Unknown sym sets:");
     for (const auto unknown_box_syms : unknown_boxes_syms)
       this->board.print_set(unknown_box_syms);
-    this->board.template print_set<Sudoku::RowSetT<SymT>>(this->board.row_sets.at(1));
+    this->board.print_set(this->board.row_sets.at(1));
     this->board.print_box(box);
 
     // need to update box_syms in case a symbols got added
@@ -263,9 +263,9 @@ public:
     // create matrix from board for now
     // ideally just make a matrix from the string after
     this->board.boxes_to_rows();
-    this->board.template print_board<Sudoku::RowT<SymT>>(this->board.rows);
+    this->board.print_board(this->board.rows);
     this->board.rows_to_cols();
-    this->board.template print_board<Sudoku::ColT<SymT>>(this->board.cols);
+    this->board.print_board(this->board.cols);
     this->board.initialize_box_row_sets();
     this->board.initialize_row_sets();
     this->board.initialize_col_sets();
@@ -298,7 +298,7 @@ public:
         }
     }
 
-    this->board.template print_board<Sudoku::RowT<SymT>>(this->board.rows);
+    this->board.print_board(this->board.rows);
 
     return this->board.is_solved();
   }
