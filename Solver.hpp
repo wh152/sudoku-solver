@@ -5,11 +5,147 @@
 namespace Sudoku {
 
 template<BoardSymbol SymT>
+struct BoardNode {
+  SymT sym;
+  size_t row_idx;
+  size_t col_idx;
+};
+
+
+template<BoardSymbol SymT>
 class Solver { // later create Board and BoardFactory classes (factory can be more complex after)
 private:
   Sudoku::Board<SymT> board;
   bool sym_found = true;
   std::string result_file;
+  std::set<BoardNode<SymT>> invalid_syms;
+
+  std::set<SymT> idx_valid_syms(const size_t row_idx, const size_t col_idx) {
+    const auto &[box_row_idx, box_idx] = board.row_col_idx_to_box_idx(row_idx, col_idx).first;
+    std::println("box_row_idx = {0}, box_idx = {1}", box_row_idx, box_idx);
+    const std::set<SymT> box_syms = this->board.box_row_sets.at(box_row_idx).at(box_idx);
+    std::print("box_syms = ");
+    this->board.print_set(box_syms);
+
+    const std::set<SymT> row_syms = this->board.row_sets.at(row_idx);
+    std::print("row_syms = ");
+    this->board.print_set(row_syms);
+
+    const std::set<SymT> col_syms = this->board.col_sets.at(col_idx);
+    std::print("col_syms = ");
+    this->board.print_set(col_syms);
+
+    std::set<SymT> valid_syms{};
+    for (const SymT sym : this->board.symbols)
+      if (!box_syms.contains(sym) && !row_syms.contains(sym) && !col_syms.contains(sym))
+        valid_syms.insert(sym);
+
+    std::print("valid_syms = ");
+    this->board.print_set(valid_syms);
+    return valid_syms;
+  }
+
+  /* Next step for hard sudokus is to guess the next numbers
+  * Store 2D valid_syms sets to plug values in
+  * Get probabilities and use dynamic programming or DFS to solve
+  * Backtracking solution:
+  * - after guaranteed picks, choose the first empty index by box
+  * - create tree where nodes have a sym val and a row/col idx pair
+  *   - there's always at least another unknown sym in any box/row/col
+  * - check either row/col arbitrarily minus first sym from row/col_set for validity
+  *   - the first time this is guaranteed true but helps simplify recursion
+  * - iterate over each symbols in the row/col, assign a remaining sym and recurse
+  *   - alternate between rows and cols (otherwise end up filling the same row/col)
+  *   - don't think it matters if you re-use a row/col from earlier
+  *   - update vectors/sets for box/row/col every time
+  * - leaf node when row/col is filled and valid
+  *   - go up and continue filling out
+  * - prune when the current symbol is invalid or no symbols remaining
+  *   - check before inserting into vectors/sets for box/row/col
+  *   - delete from vectors/sets for box/row/col if earlier tested sym invalid
+  *     - add to set of invalid nodes
+  *     - return std::unexpected with sym/row/col
+  *   - if call returns with unexpected, check if sym/row/col match
+  *     - if not return unexpected up
+  *     - if yes don't return nullptr (std::optional) so only valid path gives val
+  */
+
+  /* Note: vectorize later by checking multiple possibilities simultaneously?
+  *   - would have to do set subtractions based on pre-defined list of sim
+  * Note: could use backtracking (dp) for general solution, not just set substitution?
+  * Note: all sym idx options could still restrict options for another sym
+  *   e.g. hard_solution.txt: mid-bottom box has both options for 9 on the bottom row
+  *   so 9 must be in idx 1 or 4 in the bottom-right box, can't be at idx 7
+  *   also bottom-left box has 3 in one of indices 0, 2, 3, 5, but not idx 8
+  *   also 3/4 chance top-left box's top row has a 2
+  *     -> 3/4 chance top-mid box's bottom-right is a 2
+  *     -> 
+  * Note: to get exact probabilities have to follow the entire chain
+  * - ignore probabilities for now (not sure if calculating is even quicker)
+  */
+
+  std::expected<bool, BoardNode<SymT>> 
+  guess_sym(const BoardNode<SymT> parent, bool using_row=true) {
+    std::println("In guess_sym, parent={0}, ({1},{2}), using_row={3}",
+                  static_cast<char>(parent.sym), parent.row_idx, parent.col_idx, using_row);
+    this->board.print_board(this->board.rows);
+    std::vector<SymT> lane, perp_lane;
+    std::set<SymT> lane_syms;
+
+    if (using_row) {
+      lane = this->board.rows.at(parent.row_idx);
+      perp_lane = this->board.cols.at(parent.col_idx);
+      lane_syms = this->board.row_sets.at(parent.row_idx);
+    } else {
+      lane = this->board.cols.at(parent.col_idx);
+      perp_lane = this->board.rows.at(parent.row_idx);
+      lane_syms = this->board.col_sets.at(parent.col_idx);
+    }
+    std::print("lane = ");
+    board.print_group(lane);
+    std::print("perp_lane = ");
+    board.print_group(perp_lane);
+
+    const auto first_unknown_sym_iter = std::find(lane.begin(), lane.end(), board.SYM_UNKNOWN);
+    if (first_unknown_sym_iter == lane.end())
+      return true;
+
+    std::println("Iterating over the lane");
+    for (size_t lane_idx = 0; lane_idx < lane.size(); ++lane_idx) {
+      if (lane.at(lane_idx) != board.SYM_UNKNOWN)
+        continue;
+      std::println("lane_idx = {0}, lane_val = {1}", lane_idx, static_cast<char>(lane.at(lane_idx)));
+
+      const size_t sym_row_idx = (using_row ? parent.row_idx : lane_idx);
+      const size_t sym_col_idx = (using_row ? lane_idx : parent.col_idx);
+
+      std::set<SymT> valid_syms;
+      std::println("Calling idx_valid_syms with row_idx = {0}, col_idx = {1}", sym_row_idx, sym_col_idx);
+      valid_syms = idx_valid_syms(sym_row_idx, sym_col_idx);
+      std::print("valid_syms = ");
+      board.print_set(valid_syms);
+      if (valid_syms.size() == 0)
+        return std::unexpected(BoardNode<SymT>{parent.sym, parent.row_idx, parent.col_idx});
+      std::print("valid_syms = ");
+      board.print_set(valid_syms);
+
+      std::println("Iterating over the valid_syms");
+      for (const SymT test_sym : valid_syms) {
+        board.add_row_sym(test_sym, sym_row_idx, sym_col_idx, true);
+        auto node = BoardNode<SymT>{test_sym, sym_row_idx, sym_col_idx};
+        const auto sym_valid_val = guess_sym(node, !using_row);
+        if (!sym_valid_val.has_value()) {
+          std::println("node ({0},{1}) is invalid", node.row_idx, node.col_idx);
+          break;
+        }
+        const bool sym_valid = sym_valid_val.value();
+        std::println("sym_valid = {0}", sym_valid);
+      }
+    }
+
+    // fix later
+    return false;
+  }
 
   std::expected<void, parse_board_err> 
   test_box(const size_t box_row_idx, const size_t box_idx) {
@@ -88,11 +224,6 @@ private:
     // for rows/cols, group by boxes
     // this is O(3n)=O(n) instead of O(n^2)
     // also box_syms could be fixed here and removed from if a sym is found
-
-    /* Next step for hard sudokus is to guess the next numbers
-    * Store 2D valid_syms sets to plug values in
-    * Get probabilities and use dynamic programming or DFS to solve
-    */
 
     const auto unordered_box_syms = this->board.box_row_sets.at(box_row_idx).at(box_idx);
     const auto box_syms = std::set<SymT>(unordered_box_syms.begin(), unordered_box_syms.end());
@@ -294,6 +425,44 @@ public:
         }
     }
 
+    if (this->board.is_solved())
+      return true;
+
+    std::println("***** BACKTRACKING ***");
+    BoardNode<SymT> start_node;
+    size_t start_row_idx = 0;
+    bool start_row_found = false;
+    while (!start_row_found) {
+      const auto start_row_set = this->board.row_sets.at(start_row_idx);
+      if (start_row_set.size() == this->board.symbols.size()) {
+        std::println("start_row_set full, start_row_idx = {0}", start_row_idx);
+        ++start_row_idx;
+        continue;
+      }
+      start_row_found = true;
+
+      std::println("start_row_idx = {0}", start_row_idx);
+      const auto start_row = this->board.rows.at(start_row_idx);
+      std::println("start_row = ");
+      this->board.print_group(start_row);
+      const auto start_col_iter = std::find(start_row.begin(), start_row.end(), this->board.SYM_UNKNOWN);
+      const size_t start_col = std::distance(start_row.begin(), start_col_iter);
+      std::println("start_col = {0}", start_col);
+      const auto start_valid_syms = idx_valid_syms(start_row_idx, start_col);
+      std::println("start_valid_syms = ");
+      this->board.print_set(start_valid_syms);
+      const SymT start_sym = *start_valid_syms.begin();
+      std::println("start_sym = {0}", static_cast<char>(start_sym));
+      start_node = BoardNode<SymT>{start_sym, start_row_idx, start_col};
+    } while (!start_row_found);
+    
+    const auto backtracking_res = guess_sym(start_node, true);
+    if (!backtracking_res.has_value()) {
+      const auto error_node = backtracking_res.error();
+      std::println("Backtracking failed with BoardNode ({0},{1})", error_node.row_idx, error_node.col_idx);
+    } else
+     std::println("Backtracking returned with {0}", (backtracking_res.value() == true));
+    
     this->board.print_board(this->board.rows);
 
     return this->board.is_solved();
