@@ -442,12 +442,9 @@ private:
 
   std::pair<std::pair<std::size_t, std::size_t>, std::size_t> 
   row_col_idx_to_box_idx(const size_t row_idx, const size_t col_idx) {
-    std::println("row_idx = {0}, col_idx = {1}", row_idx, col_idx);
     const size_t box_row_idx = row_idx / this->num_dims;
-    // const size_t box_row_box_idx = col_idx / this->num_dims;
-    // const size_t box_idx = box_row_idx + box_row_box_idx;
     const size_t box_idx = col_idx / this->num_dims;
-    const size_t box_sym_idx = row_idx % this->num_dims + col_idx % this->num_dims;
+    const size_t box_sym_idx = (this->num_dims * (row_idx % this->num_dims)) + col_idx % this->num_dims;
     return std::make_pair(std::make_pair(box_row_idx, box_idx), box_sym_idx);
   }
 
@@ -511,6 +508,17 @@ private:
     
     add_row_sym(sym, col_sym_idx, col_idx);
     add_box_sym(sym, box_row_idx, box_idx, box_sym_idx);
+  }
+
+  void del_sym(const SymT sym, const size_t row_idx, const size_t col_idx) {
+    const auto &[box_indices, box_sym_idx] = row_col_idx_to_box_idx(row_idx, col_idx);
+    const auto &[box_row_idx, box_idx] = box_indices;
+    this->boxes.at(box_row_idx).at(box_idx)[box_sym_idx] = SYM_UNKNOWN;
+    this->box_row_sets.at(box_row_idx).at(box_idx).erase(sym);
+    this->rows.at(row_idx)[col_idx] = SYM_UNKNOWN;
+    this->row_sets.at(row_idx).erase(sym);
+    this->cols.at(col_idx)[row_idx] = SYM_UNKNOWN;
+    this->col_sets.at(col_idx).erase(sym);
   }
 
   bool is_solved() {

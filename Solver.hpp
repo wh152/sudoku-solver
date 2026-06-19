@@ -18,31 +18,91 @@ private:
   Sudoku::Board<SymT> board;
   bool sym_found = true;
   std::string result_file;
-  std::set<BoardNode<SymT>> invalid_syms;
+  std::set<BoardNode<SymT>> guessed_syms;
 
+  // update this to check if any other unknown syms in box/row/col have no valid syms left
   std::set<SymT> idx_valid_syms(const size_t row_idx, const size_t col_idx) {
-    const auto &[box_row_idx, box_idx] = board.row_col_idx_to_box_idx(row_idx, col_idx).first;
-    std::println("box_row_idx = {0}, box_idx = {1}", box_row_idx, box_idx);
+    const auto &[box_indices, box_sym_idx] = board.row_col_idx_to_box_idx(row_idx, col_idx);
+    const auto &[box_row_idx, box_idx] = box_indices;
+
     const std::set<SymT> box_syms = this->board.box_row_sets.at(box_row_idx).at(box_idx);
-    std::print("box_syms = ");
-    this->board.print_set(box_syms);
-
     const std::set<SymT> row_syms = this->board.row_sets.at(row_idx);
-    std::print("row_syms = ");
-    this->board.print_set(row_syms);
-
     const std::set<SymT> col_syms = this->board.col_sets.at(col_idx);
-    std::print("col_syms = ");
-    this->board.print_set(col_syms);
 
     std::set<SymT> valid_syms{};
     for (const SymT sym : this->board.symbols)
       if (!box_syms.contains(sym) && !row_syms.contains(sym) && !col_syms.contains(sym))
         valid_syms.insert(sym);
 
-    std::print("valid_syms = ");
-    this->board.print_set(valid_syms);
     return valid_syms;
+  }
+
+  std::set<SymT> idx_valid_options(const size_t row_idx, const size_t col_idx) {
+    auto valid_options = idx_valid_syms(row_idx, col_idx);
+    std::print("({0},{1}) initial valid_options = ", row_idx, col_idx);
+    this->board.print_set(valid_options);
+
+    const auto &[box_indices, box_sym_idx] = board.row_col_idx_to_box_idx(row_idx, col_idx);
+    const auto &[box_row_idx, box_idx] = box_indices;
+
+    // replace this with a check over every box on the row or col
+    // can result in 1 or 0 valid syms left for e.g. box below
+    // just check all the boxes since rows and cols are included
+
+    // if other unknown sym in box/row/col has 1 valid sym that would be 
+    // taken by this guess, then it's not a valid option
+    std::println("Checking over boxes in the same box row");
+    for (size_t other_box_idx = 0; other_box_idx < this->board.num_dims; ++other_box_idx) {
+      const auto box = this->board.boxes.at(box_row_idx).at(other_box_idx);
+      for (const auto &[other_idx, other_sym] : std::views::enumerate(box)) {
+        const auto &[other_row_idx, other_col_idx] = board.box_idx_to_row_col_idx(box_row_idx, other_box_idx, other_idx);
+        if ((other_row_idx == row_idx && other_col_idx == col_idx) || other_sym != board.SYM_UNKNOWN)
+          continue;
+
+        std::print("({0},{1}) ", other_row_idx, other_col_idx);
+        check_sole_valid_sym(other_row_idx, other_col_idx, valid_options);
+        if (valid_options.size() == 0) {
+          std::println("valid_options empty");
+          return valid_options;
+        }
+      }
+    }
+    std::println();
+
+    std::println("Checking over boxes in the same box col");
+    for (size_t other_box_row_idx = 0; other_box_row_idx < this->board.num_dims; ++other_box_row_idx) {
+      if (box_row_idx == other_box_row_idx)
+        continue;
+
+      const auto box = this->board.boxes.at(other_box_row_idx).at(box_idx);
+      for (const auto &[other_idx, other_sym] : std::views::enumerate(box)) {
+        const auto &[other_row_idx, other_col_idx] = board.box_idx_to_row_col_idx(other_box_row_idx, box_idx, other_idx);
+        if ((other_row_idx == row_idx && other_col_idx == col_idx) || other_sym != board.SYM_UNKNOWN)
+          continue;
+
+        std::print("({0},{1}) ", other_row_idx, other_col_idx);
+        check_sole_valid_sym(other_row_idx, other_col_idx, valid_options);
+        if (valid_options.size() == 0) {
+          std::println("valid_options empty");
+          return valid_options;
+        }
+      }
+    }
+    std::println();
+
+    return valid_options;
+  }
+
+  void check_sole_valid_sym(const size_t row_idx, const size_t col_idx, std::set<SymT> &valid_options) {
+    const auto other_valid_syms = idx_valid_syms(row_idx, col_idx);
+    if (other_valid_syms.size() != 1)
+      return;
+
+    const SymT other_only_valid_sym = *other_valid_syms.begin();
+    if (valid_options.contains(other_only_valid_sym)) {
+      std::println("\nerasing {0} from valid_options", (char) other_only_valid_sym);
+      valid_options.erase(other_only_valid_sym);
+    }
   }
 
   /* Next step for hard sudokus is to guess the next numbers
@@ -84,6 +144,14 @@ private:
   * - ignore probabilities for now (not sure if calculating is even quicker)
   */
 
+  // TODO: if 1 sym left in box/row/col check, prune branch if invalid (dp)
+  // e.g. hard.txt has bottom-right sym in top-left box ? when it should be pruned
+  // when detect invalid sym, must check if any substituted syms caused this
+  // must add to the guessed_syms state and find a way of recursing back to there
+  // use std::unexpected with the value of the failure-causing sym
+  // but how to know 
+  // TODO: keep state of valid_syms for each (row, col)
+  // every time you add a symbol check if valid syms in box/row/col are empty
   std::expected<bool, BoardNode<SymT>> 
   guess_sym(const BoardNode<SymT> parent, bool using_row=true) {
     std::println("In guess_sym, parent={0}, ({1},{2}), using_row={3}",
@@ -112,38 +180,43 @@ private:
 
     std::println("Iterating over the lane");
     for (size_t lane_idx = 0; lane_idx < lane.size(); ++lane_idx) {
+      std::println("Lane ({0},{1})[{2}], lane_idx = {3}, sym = {4}", 
+                    parent.row_idx, parent.col_idx, using_row, lane_idx, (char)lane.at(lane_idx));
       if (lane.at(lane_idx) != board.SYM_UNKNOWN)
         continue;
-      std::println("lane_idx = {0}, lane_val = {1}", lane_idx, static_cast<char>(lane.at(lane_idx)));
+      std::println("[{0},({1},{2}),{3}]: lane_idx = {4}, lane_val = {5}", 
+                    (char)parent.sym, parent.row_idx, parent.col_idx, using_row,
+                    lane_idx, static_cast<char>(lane.at(lane_idx)));
 
       const size_t sym_row_idx = (using_row ? parent.row_idx : lane_idx);
       const size_t sym_col_idx = (using_row ? lane_idx : parent.col_idx);
 
-      std::set<SymT> valid_syms;
-      std::println("Calling idx_valid_syms with row_idx = {0}, col_idx = {1}", sym_row_idx, sym_col_idx);
-      valid_syms = idx_valid_syms(sym_row_idx, sym_col_idx);
-      std::print("valid_syms = ");
-      board.print_set(valid_syms);
-      if (valid_syms.size() == 0)
-        return std::unexpected(BoardNode<SymT>{parent.sym, parent.row_idx, parent.col_idx});
-      std::print("valid_syms = ");
-      board.print_set(valid_syms);
+      std::set<SymT> valid_options;
+      valid_options = idx_valid_options(sym_row_idx, sym_col_idx);
+      std::print("({0},{1}) valid_options = ", sym_row_idx, sym_col_idx);
+      this->board.print_set(valid_options);
+      if (valid_options.size() == 0)
+        return std::unexpected(parent);
 
-      std::println("Iterating over the valid_syms");
-      for (const SymT test_sym : valid_syms) {
+      std::println("Iterating over the valid_options");
+      for (const SymT test_sym : valid_options) {
+        std::println("parent: ({0},{1}), test_sym = {2}", parent.row_idx, parent.col_idx, static_cast<char>(test_sym));
         board.add_row_sym(test_sym, sym_row_idx, sym_col_idx, true);
         auto node = BoardNode<SymT>{test_sym, sym_row_idx, sym_col_idx};
+        std::println("node = {0}, ({1},{2})", (char)node.sym, node.row_idx, node.col_idx);
         const auto sym_valid_val = guess_sym(node, !using_row);
         if (!sym_valid_val.has_value()) {
           std::println("node ({0},{1}) is invalid", node.row_idx, node.col_idx);
-          break;
+          this->board.del_sym(node.sym, node.row_idx, node.col_idx);
+          continue;
         }
         const bool sym_valid = sym_valid_val.value();
-        std::println("sym_valid = {0}", sym_valid);
+        if (sym_valid)
+          return true;
       }
     }
 
-    // fix later
+    this->board.del_sym(parent.sym, parent.row_idx, parent.col_idx);
     return false;
   }
 
