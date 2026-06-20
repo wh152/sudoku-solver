@@ -53,6 +53,24 @@ using RowSetT = std::set<SymT>;
 template<BoardSymbol SymT>
 using ColSetT = std::set<SymT>;
 
+template<BoardSymbol SymT>
+struct BoardNode {
+  SymT sym;
+  size_t row_idx;
+  size_t col_idx;
+
+  auto operator<=>(const BoardNode &other) const {
+    if (row_idx < other.row_idx) return -1;
+    if (row_idx > other.row_idx) return 1;
+    if (col_idx < other.col_idx) return -1;
+    if (col_idx > other.row_idx) return 1;
+    return 0;
+  }
+};
+
+template<BoardSymbol SymT>
+using NodeMapT = std::map<BoardNode<SymT>, std::set<BoardNode<SymT>>>;
+
 template<Sudoku::BoardSymbol SymT>
 class Solver;
 
@@ -88,6 +106,8 @@ private:
   std::vector<BoxRowSetT<SymT>> box_row_sets;
   std::vector<RowSetT<SymT>> row_sets;
   std::vector<ColSetT<SymT>> col_sets;
+
+  NodeMapT<SymT> guessed_syms;
 
   void parse_board_dim(const char *board_dim_arg) {
     const std::string_view board_dim_input{board_dim_arg};
@@ -378,12 +398,17 @@ private:
     }
   }
 
+  void initialize_guessed_syms() {
+    this->guessed_syms = NodeMapT<SymT>{};
+  }
+
   void setup_board() {
     boxes_to_rows();
     rows_to_cols();
     initialize_box_row_sets();
     initialize_row_sets();
     initialize_col_sets();
+    initialize_guessed_syms();
   }
 
   void print_set(const auto& set) {

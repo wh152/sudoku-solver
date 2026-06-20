@@ -5,14 +5,6 @@
 namespace Sudoku {
 
 template<BoardSymbol SymT>
-struct BoardNode {
-  SymT sym;
-  size_t row_idx;
-  size_t col_idx;
-};
-
-
-template<BoardSymbol SymT>
 class Solver { // later create Board and BoardFactory classes (factory can be more complex after)
 private:
   Sudoku::Board<SymT> board;
@@ -37,6 +29,10 @@ private:
     return valid_syms;
   }
 
+  // TODO: track which added syms made a state invalid, and prevent that combination coming up again
+  // TODO: do non-backtracking scan after inserting each element
+  //  - keep hashmap of parent node to set of (row,col,sym) tuples
+  //  - remove everything in the set when going back
   std::set<SymT> idx_valid_options(const size_t row_idx, const size_t col_idx) {
     auto valid_options = idx_valid_syms(row_idx, col_idx);
     std::print("({0},{1}) initial valid_options = ", row_idx, col_idx);
@@ -207,6 +203,11 @@ private:
         const auto sym_valid_val = guess_sym(node, !using_row);
         if (!sym_valid_val.has_value()) {
           std::println("node ({0},{1}) is invalid", node.row_idx, node.col_idx);
+          for (const BoardNode<SymT> &child : this->board.guessed_syms.at(node)) {
+            std::println("Deleting ({0},{1}): {2}", child.row_idx, child.col_idx, child.sym);
+            this->board.del_sym(child.sym, child.row_idx, child.col_idx);
+          }
+          this->board.guessed_syms.at(node).clear();
           this->board.del_sym(node.sym, node.row_idx, node.col_idx);
           continue;
         }
