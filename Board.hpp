@@ -13,6 +13,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <unordered_set>
 #include <vector>
 
@@ -52,6 +53,8 @@ template<BoardSymbol SymT>
 using RowSetT = std::set<SymT>;
 template<BoardSymbol SymT>
 using ColSetT = std::set<SymT>;
+
+using BoxLocT = std::tuple<size_t, size_t, size_t>;
 
 template<BoardSymbol SymT>
 struct BoardNode {
@@ -642,11 +645,23 @@ void Board<SymT>::del_sym(const SymT sym, const size_t row_idx, const size_t col
 
 template<BoardSymbol SymT>
 bool Board<SymT>::is_solved() {
+  for (const BoxRowT box_row : this->boxes) {
+    for (const BoxT box : box_row) {
+      std::set<SymT> box_symbols{box.begin(), box.end()};
+      if (!(this->symbols == box_symbols)) return false;
+    }
+  }
+
   // check all rows sets are equal to the set of all symbols used
   // assume boxrows and cols sets/vectors and rows vector updated
   for (const RowT row : this->rows) {
     std::set<SymT> row_symbols{row.begin(), row.end()};
     if (!(this->symbols == row_symbols)) return false;
+  }
+
+  for (const ColT col : this->cols) {
+    std::set<SymT> col_symbols{col.begin(), col.end()};
+    if (!(this->symbols == col_symbols)) return false;
   }
 
   return true;

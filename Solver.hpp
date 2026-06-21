@@ -1,5 +1,6 @@
 #pragma once
 #include "Board.hpp"
+#include <tuple>
 
 
 namespace Sudoku {
@@ -18,11 +19,17 @@ private:
 
   void check_sole_valid_sym(const size_t row_idx, const size_t col_idx, std::set<SymT> &valid_options);
 
+  void add_guessed_sym(BoardNode<SymT> &parent, const BoxLocT &child_box_idx, const SymT sym);
+
+  void del_guessed_syms(const BoardNode<SymT> &parent);
+
   std::expected<bool, BoardNode<SymT>>
   guess_sym(const BoardNode<SymT> parent, bool using_row=true);
 
   std::expected<void, parse_board_err>
-  test_box(const size_t box_row_idx, const size_t box_idx);
+  test_box(const size_t box_row_idx, const size_t box_idx, BoardNode<SymT> *parent);
+
+  void non_backtracking_search(const BoardNode<SymT> *parent);
 
 public:
   Solver(const char *num_dims, const char *board_file, const char *outfile)
@@ -164,6 +171,26 @@ void Solver<SymT>::check_sole_valid_sym(const size_t row_idx, const size_t col_i
 * - ignore probabilities for now (not sure if calculating is even quicker)
 */
 
+template<BoardSymbol SymT>
+void Solver<SymT>::add_guessed_sym(BoardNode<SymT> &parent, const BoxLocT &child_box_idx, const SymT sym) {
+  const auto &[box_row_idx, box_idx, box_sym_idx] = child_box_idx;
+  const auto &[row_idx, col_idx] = this->board.box_idx_to_row_col_idx(box_row_idx, box_idx, box_sym_idx);
+  std::println("[{0},{1}: {2}] guessing child [{3},{4}: {5}]",
+                parent.row_idx, parent.col_idx, parent.sym, row_idx, col_idx, sym);
+  this->board.guessed_syms.at(parent).emplace(BoardNode<SymT>{sym, row_idx, col_idx});
+}
+
+template<BoardSymbol SymT>
+void Solver<SymT>::del_guessed_syms(const BoardNode<SymT> &parent) {
+  for (const BoardNode<SymT> &child : this->board.guessed_syms.at(parent)) {
+    std::println("Deleting child ({0},{1}): {2}", child.row_idx, child.col_idx, child.sym);
+    this->board.del_sym(child.sym, child.row_idx, child.col_idx);
+  }
+  this->board.guessed_syms.at(parent).clear();
+  std::println("Deleting parent ({0},{1}): {2}", parent.row_idx, parent.col_idx, parent.sym);
+  this->board.del_sym(parent.sym, parent.row_idx, parent.col_idx);
+}
+
 // TODO: if 1 sym left in box/row/col check, prune branch if invalid (dp)
 // e.g. hard.txt has bottom-right sym in top-left box ? when it should be pruned
 // when detect invalid sym, must check if any substituted syms caused this
@@ -223,17 +250,13 @@ Solver<SymT>::guess_sym(const BoardNode<SymT> parent, bool using_row) {
     for (const SymT test_sym : valid_options) {
       std::println("parent: ({0},{1}), test_sym = {2}", parent.row_idx, parent.col_idx, static_cast<char>(test_sym));
       board.add_row_sym(test_sym, sym_row_idx, sym_col_idx, true);
-      auto node = BoardNode<SymT>{test_sym, sym_row_idx, sym_col_idx};
+      non_backtracking_search(&parent);
+      const auto node = BoardNode<SymT>{test_sym, sym_row_idx, sym_col_idx};
       std::println("node = {0}, ({1},{2})", (char)node.sym, node.row_idx, node.col_idx);
       const auto sym_valid_val = guess_sym(node, !using_row);
       if (!sym_valid_val.has_value()) {
         std::println("node ({0},{1}) is invalid", node.row_idx, node.col_idx);
-        for (const BoardNode<SymT> &child : this->board.guessed_syms.at(node)) {
-          std::println("Deleting ({0},{1}): {2}", child.row_idx, child.col_idx, child.sym);
-          this->board.del_sym(child.sym, child.row_idx, child.col_idx);
-        }
-        this->board.guessed_syms.at(node).clear();
-        this->board.del_sym(node.sym, node.row_idx, node.col_idx);
+        del_guessed_syms(node);
         continue;
       }
       const bool sym_valid = sym_valid_val.value();
@@ -242,13 +265,13 @@ Solver<SymT>::guess_sym(const BoardNode<SymT> parent, bool using_row) {
     }
   }
 
-  this->board.del_sym(parent.sym, parent.row_idx, parent.col_idx);
+  del_guessed_syms(parent);
   return false;
 }
 
 template<BoardSymbol SymT>
 std::expected<void, parse_board_err> 
-Solver<SymT>::test_box(const size_t box_row_idx, const size_t box_idx) {
+Solver<SymT>::test_box(const size_t box_row_idx, const size_t box_idx, BoardNode<SymT> *parent) {
   std::println("\ntest_box");
   BoxT<SymT> box = this->board.boxes[box_row_idx][box_idx]; // have to update board, rows, cols
   this->board.print_group(box);
@@ -268,11 +291,23 @@ Solver<SymT>::test_box(const size_t box_row_idx, const size_t box_idx) {
   std::println();
   
   if (sym_count == this->board.num_symbols - 1) {
-    const SymT last_unknown_sym = unknown_sym_indices.at(0);
-    const size_t box_sym_idx = *std::find(box.begin(), box.end(), last_unknown_sym);
-    this->board.add_box_sym(last_unknown_sym, box_row_idx, box_idx, box_sym_idx, true);
+    this->board.print_box(box);
+    const size_t last_unknown_sym_idx = unknown_sym_indices.at(0); // FIX: sym != idx of sym
+    BoxT<SymT> unknown_syms;
+    std::set_difference(this->board.symbols.begin(), this->board.symbols.end(), 
+                        box_set.begin(), box_set.end(), std::inserter(unknown_syms, unknown_syms.begin()));
+    const SymT last_unknown_sym = unknown_syms.at(0);
+    std::println("last_unknown_sym_idx = {0}, last_unknown_sym = {1}", last_unknown_sym_idx, (char)last_unknown_sym);
+    this->board.add_box_sym(last_unknown_sym, box_row_idx, box_idx, last_unknown_sym_idx, true);
     this->board.sym_found = true;
+    if (parent != nullptr) {
+      const BoxLocT box_loc = std::make_tuple(box_row_idx, box_idx, last_unknown_sym_idx);
+      add_guessed_sym(*parent, box_loc, last_unknown_sym);
+    } else {
+      std::println("Not calling parent");
+    }
   }
+  this->board.print_board(this->board.rows);
   
   std::println("Checking each unknown index");
 
@@ -344,7 +379,7 @@ Solver<SymT>::test_box(const size_t box_row_idx, const size_t box_idx) {
     std::println("box_sym_idx: {0}", std::to_string(box_sym_idx));
 
     const auto [row_idx, col_idx] = this->board.box_idx_to_row_col_idx(box_row_idx, box_idx, box_sym_idx);
-    std::println("row_idx = {0}, col_idx = ", row_idx, col_idx);
+    std::println("row_idx = {0}, col_idx = {1}", row_idx, col_idx);
     
     const auto row_syms = this->board.row_sets.at(row_idx);
     std::print("row_syms = ");
@@ -419,6 +454,8 @@ Solver<SymT>::test_box(const size_t box_row_idx, const size_t box_idx) {
         std::println("Calling add_box_sym, box_sym_idx = {0}", box_sym_idx);
         this->board.add_box_sym(found_sym, box_row_idx, box_idx, box_sym_idx, true);
         this->board.sym_found = true;
+        if (parent != nullptr) 
+          add_guessed_sym(*parent, std::make_tuple(box_row_idx, box_idx, box_sym_idx), found_sym);
         unknown_sym_indices.erase(unknown_sym_indices.begin() + unknown_sym_idx);
         box_updated = true;
         std::println("Added symbol {0}, trying to update box again", (char)found_sym);
@@ -473,6 +510,8 @@ Solver<SymT>::test_box(const size_t box_row_idx, const size_t box_idx) {
       for (auto unknown_box_sym : unknown_boxes_syms)
         this->board.print_set(unknown_box_sym);
       this->board.add_box_sym(found_sym, box_row_idx, box_idx, box_sym_idx, true);
+      if (parent != nullptr) 
+        add_guessed_sym(*parent, std::make_tuple(box_row_idx, box_idx, box_sym_idx), found_sym);
       unknown_sym_indices.erase(unknown_sym_indices.begin() + unknown_sym_idx);
       box_updated = true;
       std::println("Added symbol {0}, trying to update box again", (char)found_sym);
@@ -483,6 +522,32 @@ Solver<SymT>::test_box(const size_t box_row_idx, const size_t box_idx) {
   // exit(EXIT_FAILURE);
 
   return {};
+}
+
+template<BoardSymbol SymT>
+void Solver<SymT>::non_backtracking_search(const BoardNode<SymT> *parent) {
+  if (parent != nullptr)
+  std::println("Non-backtracking search, parent = ({0},{1}): {2}", (*parent).row_idx, (*parent).col_idx, (*parent).sym);
+  else
+    std::println("Non-backtracking search, parent = NULL");
+  this->board.print_board(this->board.rows);
+  while (this->board.sym_found) {
+    this->board.sym_found = false;
+
+    for (size_t box_row_idx = 0; box_row_idx < this->board.num_dims; ++box_row_idx)
+      for (size_t box_idx = 0; box_idx < this->board.num_dims; ++box_idx)
+        if (!test_box(box_row_idx, box_idx, nullptr).has_value())
+          return; // return std::unexpected but don't use it here...
+  }
+  std::println("Non-backtracking search done");
+  this->board.print_board(this->board.rows);
+  std::println("Guessed syms");
+  for (const auto &[parent, children] : this->board.guessed_syms) {
+    std::print("(({0},{1}):{2}) - [", parent.row_idx, parent.col_idx, parent.sym);
+    for (const auto child : children)
+      std::print("(({0},{1}):{2})", child.row_idx, child.col_idx, child.sym);
+    std::println("]"); // TODO: why are there no children being added? 'child' is never found in output
+  }
 }
 
 template<BoardSymbol SymT>
@@ -511,16 +576,7 @@ bool Solver<SymT>::solve() { // later find a way of testing numbers for intermed
   * Otherwise create vector of indices of missing symbols
   * For each missing symbol check perpendicular rows/cols
   */
-  while (this->board.sym_found) {
-    this->board.sym_found = false;
-
-    for (size_t box_row_idx = 0; box_row_idx < this->board.num_dims; ++box_row_idx)
-      for (size_t box_idx = 0; box_idx < this->board.num_dims; ++box_idx) {
-        if (!test_box(box_row_idx, box_idx).has_value())
-          return false; // return std::unexpected but don't use it here...
-        this->board.print_box(this->board.boxes.at(box_row_idx).at(box_idx));
-      }
-  }
+  non_backtracking_search(nullptr);
 
   if (this->board.is_solved())
     return true;
