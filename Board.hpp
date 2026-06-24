@@ -58,17 +58,11 @@ using BoxLocT = std::tuple<size_t, size_t, size_t>;
 
 template<BoardSymbol SymT>
 struct BoardNode {
-  SymT sym;
   size_t row_idx;
   size_t col_idx;
+  SymT sym;
 
-  auto operator<=>(const BoardNode &other) const {
-    if (row_idx < other.row_idx) return -1;
-    if (row_idx > other.row_idx) return 1;
-    if (col_idx < other.col_idx) return -1;
-    if (col_idx > other.row_idx) return 1;
-    return 0;
-  }
+  auto operator<=>(const BoardNode &other) const = default;
 };
 
 template<BoardSymbol SymT>
