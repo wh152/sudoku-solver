@@ -27,6 +27,7 @@ enum class parse_board_err
   invalid_box,
   invalid_sym_num, // make too_many_syms/too_few_syms later, e.g. 17 min symbols for 3x3
   // bear in mind having 17 or even more symbols doesn't guarantee a unique (well-formed) solution
+  invalid_parent,
   noncontinuous_syms,
   invalid_logic,
   invalid_total_len
@@ -106,6 +107,8 @@ private:
 
   NodeMapT<SymT> guessed_syms;
 
+  BoardNode<SymT> first_backtracking_node;
+
   void parse_board_dim(const char *board_dim_arg);
 
   std::string parse_sudoku_file(const char *file_path_arg);
@@ -138,6 +141,10 @@ private:
 
   void setup_board();
 
+  void set_first_backtracking_node(const BoardNode<SymT> &first_node);
+
+  bool parent_caused_fill(const BoardNode<SymT> &parent, const BoardNode<SymT> &child);
+
   void print_set(const auto& set);
 
   template <typename T>
@@ -148,6 +155,8 @@ private:
   template<typename T>
   void print_group(T group);
 
+  const std::string show_node(const BoardNode<SymT> &node);
+
   std::pair<std::size_t, std::size_t> 
   box_idx_to_row_col_idx(const size_t box_row_idx, const size_t box_idx, const size_t box_sym_idx);
 
@@ -157,7 +166,7 @@ private:
   template<typename TGroup> // add concepts later
   std::vector<std::size_t> unknown_symbols_indices(TGroup group);
 
-  bool full(const std::unordered_set<SymT> container);
+  bool full(const std::set<SymT> &container);
 
   void add_box_sym(const SymT sym, const size_t box_row_idx, const size_t box_idx, 
                     const size_t box_sym_idx, bool root=false);
@@ -491,6 +500,31 @@ void Board<SymT>::setup_board() {
 }
 
 template<BoardSymbol SymT>
+void Board<SymT>::set_first_backtracking_node(const BoardNode<SymT> &first_node) {
+  this->first_backtracking_node = first_node;
+}
+
+template<BoardSymbol SymT>
+bool Board<SymT>::parent_caused_fill(const BoardNode<SymT> &parent, const BoardNode<SymT> &child) {
+  const auto &[parent_box_row_idx, parent_box_idx] = row_col_idx_to_box_idx(parent.row_idx, parent.col_idx).first;
+  const auto parent_box_set = this->box_row_sets.at(parent_box_row_idx).at(parent_box_idx);
+  const auto parent_row_set = this->row_sets.at(parent.row_idx);
+  const auto parent_col_set = this->row_sets.at(parent.col_idx);
+
+  const bool parent_box_full = full(parent_box_set);
+  const bool parent_row_full = full(parent_row_set);
+  const bool parent_col_full = full(parent_col_set);
+  if (parent_box_full)
+    std::println("Parent {0} made its box full", show_node(parent));
+  if (parent_row_full)
+    std::println("Parent {0} made its row full", show_node(parent));
+  if (parent_col_full)
+    std::println("Parent {0} made its col full", show_node(parent));
+
+  return full(parent_box_set) || full(parent_row_set) || full(parent_col_set);
+}
+
+template<BoardSymbol SymT>
 void Board<SymT>::print_set(const auto& set) {
   if (set.empty()) {
     std::println();
@@ -542,6 +576,11 @@ void Board<SymT>::print_group(T group) {
 }
 
 template<BoardSymbol SymT>
+const std::string Board<SymT>::show_node(const BoardNode<SymT> &node) {
+  return std::format("(({0},{1}): {2})", node.row_idx, node.col_idx, static_cast<char>(node.sym));
+}
+
+template<BoardSymbol SymT>
 std::pair<std::size_t, std::size_t> 
 Board<SymT>::box_idx_to_row_col_idx(const size_t box_row_idx, const size_t box_idx, const size_t box_sym_idx) {
   const size_t row_idx = (box_row_idx * this->num_dims) + (box_sym_idx / this->num_dims);
@@ -570,7 +609,7 @@ std::vector<std::size_t> Board<SymT>::unknown_symbols_indices(TGroup group) {
 }
 
 template<BoardSymbol SymT>
-bool Board<SymT>::full(const std::unordered_set<SymT> container) {
+bool Board<SymT>::full(const std::set<SymT> &container) {
   return !container.contains(static_cast<SymT>(SYM_UNKNOWN)) && container.size() == this->num_symbols;
 }
 
